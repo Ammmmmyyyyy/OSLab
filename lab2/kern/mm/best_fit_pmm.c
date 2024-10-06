@@ -55,10 +55,10 @@
  *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
  *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.
  */
-free_area_t free_area;
+free_area_t free_area2;
 
-#define free_list (free_area.free_list)
-#define nr_free (free_area.nr_free)
+#define free_list (free_area2.free_list)
+#define nr_free (free_area2.nr_free)
 
 static void
 best_fit_init(void) {
@@ -75,6 +75,12 @@ best_fit_init_memmap(struct Page *base, size_t n) {
 
         /*LAB2 EXERCISE 2: YOUR CODE*/ 
         // 清空当前页框的标志和属性信息，并将页框的引用计数设置为0
+
+        // 清除页面的 flags 和 property，标记这些页面为空闲
+        p->flags = p->property = 0;
+
+        // 设置页面的引用计数为 0，表示页面当前没有被使用
+        set_page_ref(p, 0);
     }
     base->property = n;
     SetPageProperty(base);
@@ -89,6 +95,16 @@ best_fit_init_memmap(struct Page *base, size_t n) {
             // 编写代码
             // 1、当base < page时，找到第一个大于base的页，将base插入到它前面，并退出循环
             // 2、当list_next(le) == &free_list时，若已经到达链表结尾，将base插入到链表尾部
+
+            // 找到第一个地址比 base 大的页面，将 base 插入到它之前
+            if (base < page) {
+                list_add_before(le, &(base->page_link));
+                break;
+            }
+            // 如果已经到达链表的末尾，则将 base 插入到链表末尾
+            else if (list_next(le) == &free_list) {
+                list_add(le, &(base->page_link));
+            }
         }
     }
 }
@@ -109,10 +125,13 @@ best_fit_alloc_pages(size_t n) {
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {
-            page = p;
-            break;
+            size_t current_size = p->property;//当前页面大小
+            if(current_size < min_size){
+                min_size = current_size;
+                page = p;
+            }
         }
-    }
+    }//需要全部遍历，不能提前break
 
     if (page != NULL) {
         list_entry_t* prev = list_prev(&(page->page_link));
@@ -142,6 +161,15 @@ best_fit_free_pages(struct Page *base, size_t n) {
     // 编写代码
     // 具体来说就是设置当前页块的属性为释放的页块数、并将当前页块标记为已分配状态、最后增加nr_free的值
 
+    // 设置第一个页面的 property 属性为 n，表示这是一个大小为 n 的空闲块
+    base->property = n;
+
+    // 设置第一个页面的 flags 中的 PG_property 位，标记它为空闲块的开始
+    SetPageProperty(base);
+
+    // 更新系统中可用的页面总数
+    nr_free += n;
+
     if (list_empty(&free_list)) {
         list_add(&free_list, &(base->page_link));
     } else {
@@ -167,6 +195,12 @@ best_fit_free_pages(struct Page *base, size_t n) {
         // 3、清除当前页块的属性标记，表示不再是空闲页块
         // 4、从链表中删除当前页块
         // 5、将指针指向前一个空闲页块，以便继续检查合并后的连续空闲页块
+        if (p + p->property == base) {
+            p->property += base->property;  // 合并块的大小
+            ClearPageProperty(base);  // 清除 base 块的属性标志
+            list_del(&(base->page_link));  // 从链表中删除 base 块
+            base = p;  // 更新 base 指针，指向合并后的块
+        }
     }
 
     le = list_next(&(base->page_link));

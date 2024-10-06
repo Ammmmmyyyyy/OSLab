@@ -61,113 +61,205 @@ free_area_t free_area;
 static void
 default_init(void) {
     list_init(&free_list);
-    nr_free = 0;
+    nr_free = 0;//空闲快总数
 }
-
+/*
+ * default_init_memmap - 初始化一个内存块并将其插入空闲链表
+ * @base:   指向需要初始化的第一个页面
+ * @n:      需要初始化的页面数量
+ *
+ * 该函数用于初始化从 base 开始的 n 个连续页面，将这些页面的状态设置为“空闲”，
+ * 并将这个空闲块插入到全局空闲链表 `free_list` 中，维护空闲块的有序性。
+ * 该函数假设所有页面的起始地址和大小都合法，并对页面的相关属性进行设置。
+ */
 static void
 default_init_memmap(struct Page *base, size_t n) {
+    // 确保 n 大于 0，保证至少有一个页面需要初始化
     assert(n > 0);
+
+    // 初始化从 base 开始的 n 个页面
     struct Page *p = base;
-    for (; p != base + n; p ++) {
+    for (; p != base + n; p++) {
+        // 断言这些页面已经被标记为保留（PageReserved 为 1）
         assert(PageReserved(p));
+
+        // 清除页面的 flags 和 property，标记这些页面为空闲
         p->flags = p->property = 0;
+
+        // 设置页面的引用计数为 0，表示页面当前没有被使用
         set_page_ref(p, 0);
     }
+
+    // 设置第一个页面的 property 属性为 n，表示这是一个大小为 n 的空闲块
     base->property = n;
+
+    // 设置第一个页面的 flags 中的 PG_property 位，表示它是一个空闲块的开始
     SetPageProperty(base);
+
+    // 增加系统中空闲页面的总数
     nr_free += n;
-    if (list_empty(&free_list)) {
+
+    // 如果空闲链表为空，直接将这个块加入链表
+    if (list_empty(&free_list)) {//双向链表
+        // 将 base 页面链接到空闲链表的头部
         list_add(&free_list, &(base->page_link));
     } else {
-        list_entry_t* le = &free_list;
+        // 如果空闲链表非空，找到合适的位置插入这个块
+        list_entry_t *le = &free_list;
+
+        // 遍历空闲链表，找到合适的插入位置（按地址从低到高排序）
         while ((le = list_next(le)) != &free_list) {
-            struct Page* page = le2page(le, page_link);
+            // 将通用的链表项转换为 Page 结构
+            struct Page *page = le2page(le, page_link);
+
+            // 找到第一个地址比 base 大的页面，将 base 插入到它之前
             if (base < page) {
                 list_add_before(le, &(base->page_link));
                 break;
-            } else if (list_next(le) == &free_list) {
+            }
+            // 如果已经到达链表的末尾，则将 base 插入到链表末尾
+            else if (list_next(le) == &free_list) {
                 list_add(le, &(base->page_link));
             }
         }
     }
 }
 
+/*
+ * default_alloc_pages - 从空闲链表中分配指定数量的页面
+ * @n:     需要分配的页面数量
+ *
+ * 该函数实现了“首次适配”（First-Fit Allocation）算法，从空闲链表 `free_list` 中找到第一个满足分配需求的内存块。
+ * 如果找到的块大于需求，则分割该块，将剩余部分继续作为空闲块存放在空闲链表中。
+ * 返回找到的页面块的起始地址，如果没有足够的空闲页面，则返回 NULL。
+ */
 static struct Page *
 default_alloc_pages(size_t n) {
+    // 确保 n 大于 0，即需要分配至少一个页面
     assert(n > 0);
+
+    // 如果请求的页面数大于系统中可用的页面总数，则无法分配，返回 NULL
     if (n > nr_free) {
         return NULL;
     }
-    struct Page *page = NULL;
-    list_entry_t *le = &free_list;
+
+    struct Page *page = NULL;  // 用于存储找到的空闲页面块
+    list_entry_t *le = &free_list;  // 从空闲链表的头部开始遍历
+
+    // 遍历空闲链表，寻找第一个满足要求的页面块（块大小 >= n）
     while ((le = list_next(le)) != &free_list) {
-        struct Page *p = le2page(le, page_link);
-        if (p->property >= n) {
-            page = p;
+        struct Page *p = le2page(le, page_link);  // 将链表项转换为页面结构体
+        if (p->property >= n) {  // 检查页面块的大小是否满足需求
+            page = p;  // 找到合适的页面块
             break;
         }
     }
+
+    // 如果找到合适的页面块
     if (page != NULL) {
+        // 获取页面块前一个链表项，准备修改空闲链表
         list_entry_t* prev = list_prev(&(page->page_link));
+
+        // 将该页面块从空闲链表中删除
         list_del(&(page->page_link));
+
+        // 如果找到的块比请求的页面数大，需要拆分
         if (page->property > n) {
-            struct Page *p = page + n;
-            p->property = page->property - n;
-            SetPageProperty(p);
-            list_add(prev, &(p->page_link));
+            struct Page *p = page + n;  // 找到剩余的空闲块起始地址
+            p->property = page->property - n;  // 更新剩余块的大小
+            SetPageProperty(p);  // 设置剩余块的属性标志位
+            list_add(prev, &(p->page_link));  // 将剩余块重新插入空闲链表
         }
+
+        // 更新系统中可用的页面总数
         nr_free -= n;
+
+        // 清除当前页面块的 PG_property 标志位，表示它不再是空闲块
         ClearPageProperty(page);
     }
+
+    // 返回找到的页面块的起始地址
     return page;
 }
 
+/*
+ * default_free_pages - 将指定的页面块释放并插入到空闲链表
+ * @base:   指向需要释放的第一个页面
+ * @n:      需要释放的页面数量
+ *
+ * 该函数用于释放从 base 开始的 n 个连续页面，将这些页面标记为空闲并插入到空闲链表中。
+ * 它还会尝试合并相邻的空闲块，以减少碎片化。
+ */
 static void
 default_free_pages(struct Page *base, size_t n) {
+    // 确保 n 大于 0，保证至少有一个页面需要释放
     assert(n > 0);
+
+    // 初始化每个页面的标志位，清除保留和属性标志，并将引用计数设为 0
     struct Page *p = base;
-    for (; p != base + n; p ++) {
+    for (; p != base + n; p++) {
+        // 确保页面既不是保留页，也不是属性页
         assert(!PageReserved(p) && !PageProperty(p));
+
+        // 清除页面的所有标志位
         p->flags = 0;
+
+        // 设置页面的引用计数为 0
         set_page_ref(p, 0);
     }
+
+    // 设置第一个页面的 property 属性为 n，表示这是一个大小为 n 的空闲块
     base->property = n;
+
+    // 设置第一个页面的 flags 中的 PG_property 位，标记它为空闲块的开始
     SetPageProperty(base);
+
+    // 更新系统中可用的页面总数
     nr_free += n;
 
+    // 将空闲块插入空闲链表
     if (list_empty(&free_list)) {
+        // 如果空闲链表为空，将这个块直接加入链表
         list_add(&free_list, &(base->page_link));
     } else {
+        // 如果空闲链表非空，找到合适的位置插入
         list_entry_t* le = &free_list;
         while ((le = list_next(le)) != &free_list) {
             struct Page* page = le2page(le, page_link);
+            // 找到比 base 页面的地址大的块，将 base 插入到它之前
             if (base < page) {
                 list_add_before(le, &(base->page_link));
                 break;
-            } else if (list_next(le) == &free_list) {
+            }
+            // 如果已经到达链表末尾，将 base 插入到末尾
+            else if (list_next(le) == &free_list) {
                 list_add(le, &(base->page_link));
             }
         }
     }
 
+    // 尝试与前一个块合并
     list_entry_t* le = list_prev(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);
+        // 如果前一个块紧邻当前块，则合并这两个块
         if (p + p->property == base) {
-            p->property += base->property;
-            ClearPageProperty(base);
-            list_del(&(base->page_link));
-            base = p;
+            p->property += base->property;  // 合并块的大小
+            ClearPageProperty(base);  // 清除 base 块的属性标志
+            list_del(&(base->page_link));  // 从链表中删除 base 块
+            base = p;  // 更新 base 指针，指向合并后的块
         }
     }
 
+    // 尝试与后一个块合并
     le = list_next(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);
+        // 如果后一个块紧邻当前块，则合并这两个块
         if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
+            base->property += p->property;  // 合并块的大小
+            ClearPageProperty(p);  // 清除 p 块的属性标志
+            list_del(&(p->page_link));  // 从链表中删除 p 块
         }
     }
 }

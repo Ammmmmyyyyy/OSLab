@@ -74,6 +74,13 @@ typedef size_t ppn_t;
  * */
 #define to_struct(ptr, type, member)                               \
     ((type *)((char *)(ptr) - offsetof(type, member)))
+/*ptr：这是一个指向结构体中某个成员的指针，通常是链表节点指针或其他成员的指针。
+type：这是包含该成员的结构体的类型。例如，如果 member 是 struct Page 中的一个成员变量，则 type 是 struct Page。
+member：这是结构体中的某个成员的名称（即字段名）。宏的目的是从这个成员的指针 ptr 回到包含它的结构体。
+offsetof(type, member)：这个标准宏用于获取 member 在 type 结构体中的偏移量（相对于结构体起始地址的字节数）。
+(char *)(ptr) - offsetof(type, member)：先将 ptr（指向成员的指针）转换为 char * 类型，以便按字节进行地址运算。然后通过减去该成员在结构体中的偏移量 offsetof(type, member)，我们就可以得到整个结构体的起始地址。
+(type *)：最后，将计算出的结构体起始地址转换为指向 type 类型（即整个结构体）的指针。
+*/
 
 #endif /* !__LIBS_DEFS_H__ */
 
