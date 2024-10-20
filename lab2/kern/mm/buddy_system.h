@@ -1,15 +1,35 @@
-#ifndef __KERN_MM_BEST_FIT_PMM_H__
-#define  __KERN_MM_BEST_FIT_PMM_H__
+#ifndef __KERN_MM_BUDDY_PMM_H__
+#define  __KERN_MM_BUDDY_PMM_H__
 
 #include <pmm.h>
+#include <list.h>
+#include <string.h>
+#include <stdio.h>
+extern const struct pmm_manager buddy_pmm_manager;
 
-#define IS_POWER_OF_2(x) ((x) > 0 && ((x) & ((x) - 1)) == 0)//对于任意一个2的幂（如1, 2, 4, 8等），它们的二进制表示中只有一位是1，因此与其减去1后的结果按位与运算将为0
-#define LEFT_LEAF(index) (2 * (index) + 1)   // 左子节点的索引
-#define RIGHT_LEAF(index) (2 * (index) + 2)  // 右子节点的索引
-#define PARENT(index) ((index - 1) / 2)           // 父节点的索引
+#define MAX_BUDDY_NUMBER 10 // The max number of buddy system is 10
+
+#define LEFT_LEAF(index) ((index) * 2 + 1)
+#define RIGHT_LEAF(index) ((index) * 2 + 2)
+#define PARENT(index) ( ((index) + 1) / 2 - 1)
+
+#define IS_POWER_OF_2(x) (!((x)&((x)-1)))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 
-extern const struct pmm_manager default_pmm_manager;
 
-#endif /* ! __KERN_MM_DEFAULT_PMM_H__ */
+
+
+
+
+
+
+
+
+
+
+
+
+extern const struct pmm_manager slub_pmm_manager;
+
+#endif /* ! __KERN_MM_BEST_FIT_PMM_H__ */

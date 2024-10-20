@@ -2687,7 +2687,7 @@ ffffffffc0201446:	f61fe0ef          	jal	ffffffffc02003a6 <__panic>
     uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * (npage - nbase));
 ffffffffc020144a:	00001617          	auipc	a2,0x1
 ffffffffc020144e:	02660613          	addi	a2,a2,38 # ffffffffc0202470 <etext+0xa8c>
-ffffffffc0201452:	06e00593          	li	a1,110
+ffffffffc0201452:	07000593          	li	a1,112
 ffffffffc0201456:	00001517          	auipc	a0,0x1
 ffffffffc020145a:	04250513          	addi	a0,a0,66 # ffffffffc0202498 <etext+0xab4>
 ffffffffc020145e:	f49fe0ef          	jal	ffffffffc02003a6 <__panic>
@@ -2695,7 +2695,7 @@ ffffffffc020145e:	f49fe0ef          	jal	ffffffffc02003a6 <__panic>
 ffffffffc0201462:	86ae                	mv	a3,a1
 ffffffffc0201464:	00001617          	auipc	a2,0x1
 ffffffffc0201468:	00c60613          	addi	a2,a2,12 # ffffffffc0202470 <etext+0xa8c>
-ffffffffc020146c:	08900593          	li	a1,137
+ffffffffc020146c:	08b00593          	li	a1,139
 ffffffffc0201470:	00001517          	auipc	a0,0x1
 ffffffffc0201474:	02850513          	addi	a0,a0,40 # ffffffffc0202498 <etext+0xab4>
 ffffffffc0201478:	f2ffe0ef          	jal	ffffffffc02003a6 <__panic>

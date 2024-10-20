@@ -1,7 +1,4 @@
 #include <pmm.h>
-#include <list.h>
-#include <string.h>
-#include <stdio.h>
 #include <buddy_system.h>
 
 struct buddy {
@@ -11,7 +8,7 @@ struct buddy {
     struct Page *begin_page;
 };
 
-struct buddy b[11];
+struct buddy b[MAX_BUDDY_NUMBER];
 int id_ = 0;
 
 static size_t next_power_of_2(size_t size) {
@@ -22,6 +19,17 @@ static size_t next_power_of_2(size_t size) {
     size |= size >> 16;
     return size + 1;
 }
+static size_t last_power_of_2(size_t n){
+    // 将n最高位的1保留，其余位为0
+    n |= (n >> 1);
+    n |= (n >> 2);
+    n |= (n >> 4);
+    n |= (n >> 8);
+    n |= (n >> 16);
+
+    // 返回小于等于n的最大2的幂
+    return n - (n >> 1);
+}
 
 static void
 buddy_init() {
@@ -30,139 +38,99 @@ buddy_init() {
 
 static void
 buddy_init_memmap(struct Page *base, size_t n) {
-    // 获取当前 buddy 结构体，并递增 id_ 以准备下一个
-    struct buddy *bu = &b[id_++];
+    cprintf("n: %d\n", n);
+    struct buddy *buddy = &b[id_++];
     size_t s;
-    // 计算 n 的下一个 2 的幂
     if(!IS_POWER_OF_2(n)){
-        s = next_power_of_2(n);
+        s = last_power_of_2(n);
     }
     else{
         s = n;
     }
-    // 计算额外空间
-    size_t e = s - n;
+    
 
-    // 初始化 buddy 结构体的大小和当前可用空间
-    bu->size = s;
-    bu->curr_free = s - e;
+    buddy->size = s;//buddy的大小
+    buddy->curr_free = s;//当前空闲的可用页数
+    buddy->longest = KADDR(page2pa(base));// 指向 base 的内存地址
+    buddy->begin_page = base;
 
-    // 将最长空闲块的物理地址转换为内核虚拟地址
-    bu->longest =  (uintptr_t *)PADDR(page2pa(base));
+    size_t node_size = buddy->size * 2;
 
-    // 开始页的地址
-    bu->begin_page = base;
-
-
-    // 初始化空闲块大小
-    size_t node_size = bu->size * 2;
-
-    // 填充 longest 数组
-    for (int i = 0; i < 2 * bu->size - 1; i++) {
-        // 如果 i+1 是 2 的幂，减小空闲块大小
+    for (int i = 0; i < 2 * buddy->size - 1; i++) {
         if (IS_POWER_OF_2(i + 1)) {
             node_size /= 2;
         }
-        // 设置当前块的大小
-        bu->longest[i] = node_size;
+        buddy->longest[i] = node_size;
     }
 
-    // 查找并标记大小为 e 的空闲块
-    int id = 0;
-    int num_e = 0;
-    while (1) {
-        if (bu->longest[id] == 1) {
-            bu->longest[id] = 0; // 标记为空闲块
-            num_e++;
-            if(num_e == e)
-                break;
-        }
-         // 如果当前不是叶子节点，继续向下遍历
-        if (LEFT_LEAF(id) < 2 * bu->size - 1) {
-            // 如果左子节点是空闲块，移动到左子节点
-            if (bu->longest[LEFT_LEAF(id)] > 0) {
-                id = LEFT_LEAF(id);
-            }
-            // 如果左子节点不可用，检查右子节点
-            else if (bu->longest[RIGHT_LEAF(id)] > 0) {
-                id = RIGHT_LEAF(id);
-            }
-        }
-        // 如果当前是叶子节点，或者左右子节点都不可用，回溯到父节点
-        else {
-            while (id != 0 && (id == RIGHT_LEAF(PARENT(id)) || bu->longest[RIGHT_LEAF(PARENT(id))] == 0)) {
-                id = PARENT(id);  // 回溯到父节点
-            }
-            // 如果父节点的右子节点可用，移动到右子节点
-            if (id != 0) {
-                id = RIGHT_LEAF(PARENT(id));
-            }
-        }
+    struct Page *p = buddy->begin_page;
+    for (; p != base + buddy->curr_free; p ++) {
+        assert(PageReserved(p));
+        p->flags = p->property = 0;
+        set_page_ref(p, 0);
     }
-
-    // 更新父节点的大小信息
-    for (int id = 2 * bu->size - 1; id > 0; id--) {
-        int i = PARENT(id);
-        bu->longest[i] = MAX(bu->longest[LEFT_LEAF(i)], bu->longest[RIGHT_LEAF(i)]);
-    }
-
-    // 清理从 begin_page 到 curr_free 之间的页面
-    struct Page *p = bu->begin_page;
-    for (; p != base + bu->curr_free; p++) {
-        assert(PageReserved(p)); // 确保页面是保留的
-        p->flags = p->property = 0; // 重置标志和属性
-        set_page_ref(p, 0); // 设置引用计数为0
-    }
-    base->property = n;
+    base->property = s;
     SetPageProperty(base);
 }
 
-
+// 定义一个函数用于在 buddy system 中分配页面
 static struct Page *buddy_alloc_pages(size_t n) {
     // 确保请求的页面数量大于 0
     assert(n > 0);
-    unsigned index = 0;
-    unsigned node_size;
-    unsigned offset = 0;
 
+    // 如果 n 不是 2 的幂，将其调整为下一个最接近的 2 的幂
     if (!IS_POWER_OF_2(n))
         n = next_power_of_2(n);
 
-    struct buddy *bu = NULL;
-    for(int i = 0 ; i < id_ ; i++){//遍历所有的 buddy，找到一个可以满足页面请求的 buddy
-        if(b[i].longest[index] > n){
-            bu = &b[i];
+    size_t index = 0;
+    size_t node_size;
+    size_t offset = 0;
+
+    struct buddy *buddy = NULL;
+
+    // 遍历所有的 buddy，找到一个可以满足页面请求的 buddy
+    for (int i = 0; i < id_; i++) {
+        if (b[i].longest[index] >= n) {
+            buddy = &b[i];
             break;
         }
     }
 
-    if (!bu || n > bu->curr_free) {
+    // 如果没有找到合适的 buddy，则返回 NULL，表示分配失败
+    if (!buddy) {
         return NULL;
     }
 
-    for (node_size = bu -> size ; node_size != n ; node_size /= 2 ){
+    // 在 buddy 的管理树中查找一个大小适中的块来分配
+    for (node_size = buddy->size; node_size != n; node_size /= 2) {
         // 检查左子节点是否满足大小需求
-        if (bu->longest[LEFT_LEAF(index)] >= n)
+        if (buddy->longest[LEFT_LEAF(index)] >= n)
             index = LEFT_LEAF(index);
         // 否则检查右子节点
         else
             index = RIGHT_LEAF(index);
     }
 
-    bu->longest[index] = 0;
-    offset = (index + 1) * node_size - bu->size; //bu->size 是这棵 buddy 树的根节点表示的块大小，node_size 是当前分配的块大小，index 是 longest 数组中节点的索引
+    // 将找到的块标记为已用
+    buddy->longest[index] = 0;
 
+    // 计算该块在 buddy 的页面范围内的偏移量
+    offset = (index + 1) * node_size - buddy->size;
+
+    // 向上更新树的状态，确保父节点表示它的两个子节点中较大的空闲块
     while (index) {
         index = PARENT(index);
-        bu->longest[index] =MAX(bu->longest[LEFT_LEAF(index)], bu->longest[RIGHT_LEAF(index)]);
+        buddy->longest[index] = MAX(buddy->longest[LEFT_LEAF(index)], buddy->longest[RIGHT_LEAF(index)]);
     }
 
     // 减少 buddy 的当前空闲页面数
-    bu->curr_free -= n;
+    buddy->curr_free -= n;
 
     // 返回分配的页面的起始地址
-    return bu->begin_page + offset;
+    return buddy->begin_page + offset;
 }
+
+
 
 static void
 buddy_free_pages(struct Page *base, size_t n) {
@@ -215,7 +183,9 @@ buddy_free_pages(struct Page *base, size_t n) {
             // 否则，将父节点设置为左子节点和右子节点中的较大值
             bu->longest[index] = MAX(left_longest, right_longest);
     }
+
 }
+
 
 static size_t
 buddy_nr_free_pages(void) {
@@ -225,6 +195,7 @@ buddy_nr_free_pages(void) {
     }
     return total_free_pages;
 }
+
 
 static void
 buddy_check(void) {
@@ -238,7 +209,7 @@ buddy_check(void) {
     // 获取页面的物理地址，并转换为可用的虚拟地址。这里需要根据你的实现来完成。
     // 注意：你可能需要使用其他函数来获取/转换地址，依据你的内核/平台实现。
     uintptr_t pa = page2pa(p_);
-    uintptr_t va = PADDR(pa);
+    uintptr_t *va = KADDR(pa);
 
     // 写入数据到分配的内存块
     int *data_ptr = (int *)va;
