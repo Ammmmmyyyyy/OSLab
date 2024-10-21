@@ -18,7 +18,8 @@ static inline bool test_and_clear_bit(int nr, volatile void *addr)
     __attribute__((always_inline));
 
 #define BITS_PER_LONG __riscv_xlen
-
+//__riscv_xlen 是 RISC-V 架构的位宽，取决于处理器配置。BITS_PER_LONG 表示在该平台上 unsigned long 的位宽
+//__AMO(op) 宏用于根据位宽生成原子操作的汇编指令（amo 是 RISC-V 的原子内存操作）。如果是 64 位，则操作会生成以 .d 结尾的指令，表示操作 64 位的数据；如果是 32 位，则操作会生成以 .w 结尾的指令，表示操作 32 位的数据。
 #if (BITS_PER_LONG == 64)
 #define __AMO(op) "amo" #op ".d"
 #elif (BITS_PER_LONG == 32)
@@ -26,10 +27,17 @@ static inline bool test_and_clear_bit(int nr, volatile void *addr)
 #else
 #error "Unexpected BITS_PER_LONG"
 #endif
-
+//BIT_MASK(nr)：生成一个掩码，用于获取位 nr。它通过移位操作生成一个 1，掩码的位置是 nr % BITS_PER_LONG，即该位在一个 unsigned long 中的相对位置。
+//BIT_WORD(nr)：计算位 nr 所在的 unsigned long 数组中的索引。
 #define BIT_MASK(nr) (1UL << ((nr) % BITS_PER_LONG))
 #define BIT_WORD(nr) ((nr) / BITS_PER_LONG)
-
+/*
+这是一个原子测试并修改位的宏：
+nr：要操作的位。
+addr：内存地址。
+它使用 RISC-V 的 amo 指令（通过 __AMO(op) 宏生成），操作 addr 数组中的 nr 位。
+返回修改前该位的值。
+*/
 #define __test_and_op_bit(op, mod, nr, addr)                         \
     ({                                                               \
         unsigned long __res, __mask;                                 \
@@ -39,7 +47,12 @@ static inline bool test_and_clear_bit(int nr, volatile void *addr)
                              : "r"(mod(__mask)));                    \
         ((__res & __mask) != 0);                                     \
     })
-
+/*
+这是另一个原子操作宏，直接修改指定位：
+op：操作类型（如 or, and, xor）。
+mod：掩码修改操作（NOP 或 NOT）。
+不返回值，直接修改内存中该位。
+*/
 #define __op_bit(op, mod, nr, addr)                 \
     __asm__ __volatile__(__AMO(op) " zero, %1, %0"  \
                          : "+A"(addr[BIT_WORD(nr)]) \

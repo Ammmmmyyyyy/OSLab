@@ -10,7 +10,7 @@
 #define KERNTOP             (KERNBASE + KMEMSIZE) // 0x88000000对应的虚拟地址
 
 #define PHYSICAL_MEMORY_END         0x88000000
-#define PHYSICAL_MEMORY_OFFSET      0xFFFFFFFF40000000
+#define PHYSICAL_MEMORY_OFFSET      0xFFFFFFFF40000000////物理地址和虚拟地址的偏移量
 #define KERNEL_BEGIN_PADDR          0x80200000
 #define KERNEL_BEGIN_VADDR          0xFFFFFFFFC0200000
 
@@ -59,15 +59,6 @@ typedef struct {
     list_entry_t free_list;         // the list header
     unsigned int nr_free;           // number of free pages in this free list
 } free_area_t;
-
-/* buddy system 的结构体 */
-#define MAX_BUDDY_ORDER 14 // 0x7cb9 31929，不到2的15次方个页
-typedef struct
-{
-    unsigned int max_order;                       // 实际最大块的大小
-    list_entry_t free_array[MAX_BUDDY_ORDER + 1]; // 伙伴堆数组
-    unsigned int nr_free;                         // 伙伴系统中剩余的空闲块
-} free_buddy_t;
 
 #endif /* !__ASSEMBLER__ */
 

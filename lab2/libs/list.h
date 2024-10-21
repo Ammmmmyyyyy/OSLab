@@ -14,12 +14,12 @@
  * directly rather than using the generic single-entry routines.
  * */
 
-struct list_entry {
+struct list_entry {//双向链表
     struct list_entry *prev, *next;
 };
 
 typedef struct list_entry list_entry_t;
-
+//文件中使用了内联函数（inline），并为它们加上了 __attribute__((always_inline))，这是 GCC 的属性，确保这些函数在调用时总是内联展开，以减少函数调用的开销，增加效率
 static inline void list_init(list_entry_t *elm) __attribute__((always_inline));
 static inline void list_add(list_entry_t *listelm, list_entry_t *elm) __attribute__((always_inline));
 static inline void list_add_before(list_entry_t *listelm, list_entry_t *elm) __attribute__((always_inline));
@@ -100,7 +100,7 @@ list_del(list_entry_t *listelm) {
  * Note: list_empty() on @listelm returns true after this.
  * */
 static inline void
-list_del_init(list_entry_t *listelm) {
+list_del_init(list_entry_t *listelm) {//从链表中删除一个节点，并重新初始化该节点。
     list_del(listelm);
     list_init(listelm);
 }

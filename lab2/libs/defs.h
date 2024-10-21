@@ -63,6 +63,12 @@ typedef size_t ppn_t;
         })
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
+//计算结构体成员相对于结构体开头的偏移量
+/*
+(type *)0：将0强制转换为指向类型 type 的指针，虽然这个地址是非法的，但因为我们不会实际访问它，只是用来计算偏移量，所以是安全的。
+&((type *)0)->member：通过伪造的指针 0 来获取 member 的地址，这实际上是获取了成员 member 在结构体 type 中的相对位置（偏移量）。
+(size_t)：将结果转换为 size_t 类型，表示这是一个无符号的偏移量值
+*/
 #define offsetof(type, member)                                      \
     ((size_t)(&((type *)0)->member))
 
@@ -73,8 +79,8 @@ typedef size_t ppn_t;
  * @member: the name of the member within the struct
  * */
 #define to_struct(ptr, type, member)                               \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
-/*ptr：这是一个指向结构体中某个成员的指针，通常是链表节点指针或其他成员的指针。
+    ((type *)((char *)(ptr) - offsetof(type, member)))//le指向的就是page->page_link，offset算的是page_link这个成员在page这个结构体中的偏移量，因此减去偏移量就能得到le当前在的这个page中的page的地址
+/*ptr：这是一个指向链表节点的指针。
 type：这是包含该成员的结构体的类型。例如，如果 member 是 struct Page 中的一个成员变量，则 type 是 struct Page。
 member：这是结构体中的某个成员的名称（即字段名）。宏的目的是从这个成员的指针 ptr 回到包含它的结构体。
 offsetof(type, member)：这个标准宏用于获取 member 在 type 结构体中的偏移量（相对于结构体起始地址的字节数）。

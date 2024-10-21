@@ -20,7 +20,7 @@ size_t npage = 0;
 uint64_t va_pa_offset;
 // memory starts at 0x80000000 in RISC-V
 // DRAM_BASE defined in riscv.h as 0x80000000
-const size_t nbase = DRAM_BASE / PGSIZE;
+const size_t nbase = DRAM_BASE / PGSIZE;//表示物理内存开始的页号
 
 // virtual address of boot-time page directory
 uintptr_t *satp_virtual = NULL;
@@ -51,7 +51,7 @@ static void init_memmap(struct Page *base, size_t n) {
 struct Page *alloc_pages(size_t n) {
     struct Page *page = NULL;
     bool intr_flag;
-    local_intr_save(intr_flag);
+    local_intr_save(intr_flag);//为了防止中断影响，使用 local_intr_save 和 local_intr_restore 暂时禁用中断，保证内存分配是原子的。
     {
         page = pmm_manager->alloc_pages(n);
     }
@@ -96,20 +96,20 @@ static void page_init(void) {
     uint64_t maxpa = mem_end;
 
     if (maxpa > KERNTOP) {
-        maxpa = KERNTOP;
+        maxpa = KERNTOP;//KERNTOP：mem_end对应的虚拟地址，将其限制在内核可管理的范围内，避免超出内核地址空间范围。
     }
 
     extern char end[];
 
-    npage = maxpa / PGSIZE;
+    npage = maxpa / PGSIZE;//最大物理地址 maxpa对应的页号
     //kernel在end[]结束, pages是剩下的页的开始
-    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
+    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);//是一个指向 Page 结构体数组的指针，管理每个物理页的元数据。它的起始地址通过 ROUNDUP 对齐到页大小，以确保 pages 数组的开始地址是页对齐的。
 
     for (size_t i = 0; i < npage - nbase; i++) {
         SetPageReserved(pages + i);
     }
 
-    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * (npage - nbase));
+    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * (npage - nbase));//计算 pages 数组结束后的地址。通过将 pages 的地址加上 Page 结构体的大小乘以 npage - nbase，我们可以得到 pages 数组在内存中的结束位置。通过 PADDR 宏将其转换为物理地址。
 
     mem_begin = ROUNDUP(freemem, PGSIZE);
     mem_end = ROUNDDOWN(mem_end, PGSIZE);
@@ -134,8 +134,8 @@ void pmm_init(void) {
     // use pmm->check to verify the correctness of the alloc/free function in a pmm
     check_alloc_page();
 
-    extern char boot_page_table_sv39[];
-    satp_virtual = (pte_t*)boot_page_table_sv39;
+    extern char boot_page_table_sv39[];// 指向系统的引导页表
+    satp_virtual = (pte_t*)boot_page_table_sv39;// 这个变量指向 boot_page_table_sv39
     satp_physical = PADDR(satp_virtual);
     cprintf("satp virtual address: 0x%016lx\nsatp physical address: 0x%016lx\n", satp_virtual, satp_physical);
 }
