@@ -39,3 +39,10 @@ void sbi_set_timer(unsigned long long stime_value) {
 int sbi_console_getchar(void) {
     return sbi_call(SBI_CONSOLE_GETCHAR, 0, 0, 0);
 }
+
+void sbi_shutdown(void)
+{
+  //  __asm__ volatile(".word 0xFFFFFFFF");  // 触发非法指令异常
+   //__asm__ volatile("ebreak");  // 触发断点异常
+    sbi_call(SBI_SHUTDOWN,0,0,0);
+}

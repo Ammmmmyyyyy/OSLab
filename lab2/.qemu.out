@@ -22,9 +22,9 @@ PMP1: 0x0000000000000000-0xffffffffffffffff (A,R,W,X)
 (THU.CST) os is loading ...
 Special kernel symbols:
   entry  0xffffffffc0200032 (virtual)
-  etext  0xffffffffc02019e4 (virtual)
-  edata  0xffffffffc0206010 (virtual)
-  end    0xffffffffc0206470 (virtual)
+  etext  0xffffffffc0201cf2 (virtual)
+  edata  0xffffffffc0206030 (virtual)
+  end    0xffffffffc02064a0 (virtual)
 Kernel executable memory footprint: 26KB
 memory management: best_fit_pmm_manager
 physcial memory map:
@@ -33,55 +33,14 @@ check_alloc_page() succeeded!
 satp virtual address: 0xffffffffc0205000
 satp physical address: 0x0000000080205000
 ++ setup timer interrupts
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
-100 ticks
+slub_init() succeeded!
+slub check begin
+slobfree len: 0
+slobfree len: 1
+slobfree len: 1
+slobfree len: 2
+slobfree len: 1
+slub check end
 100 ticks
 100 ticks
 100 ticks

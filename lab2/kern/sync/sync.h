@@ -28,9 +28,8 @@ static inline void __intr_restore(bool flag) {
         intr_enable();
     }
 }
-
+//local_intr_save(x)：这个宏用于保存当前中断状态并禁用中断。宏内部调用 __intr_save()，并将返回的中断状态保存到变量 x 中。这样可以在之后通过 x 知道之前的中断状态，以便离开临界区时恢复
 #define local_intr_save(x) \
-    //local_intr_save(x)：这个宏用于保存当前中断状态并禁用中断。宏内部调用 __intr_save()，并将返回的中断状态保存到变量 x 中。这样可以在之后通过 x 知道之前的中断状态，以便离开临界区时恢复
     do {                   \
         x = __intr_save(); \
     } while (0)
