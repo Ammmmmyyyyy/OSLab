@@ -61,16 +61,16 @@ static void check_pgfault(void);
 // mm_create -  alloc a mm_struct & initialize it.
 struct mm_struct *
 mm_create(void) {
-    struct mm_struct *mm = kmalloc(sizeof(struct mm_struct));
+    struct mm_struct *mm = kmalloc(sizeof(struct mm_struct));// 使用 kmalloc 分配内存管理结构体 mm_struct
 
     if (mm != NULL) {
-        list_init(&(mm->mmap_list));
-        mm->mmap_cache = NULL;
-        mm->pgdir = NULL;
-        mm->map_count = 0;
+        list_init(&(mm->mmap_list));// 初始化 vma 链表头
+        mm->mmap_cache = NULL;// 当前访问的 vma 为空
+        mm->pgdir = NULL;// 页目录表初始化为空
+        mm->map_count = 0;// 初始 vma 数量为 0
 
-        if (swap_init_ok) swap_init_mm(mm);
-        else mm->sm_priv = NULL;
+        if (swap_init_ok) swap_init_mm(mm);// 如果启用了 swap，则初始化 swap 管理相关数据
+        else mm->sm_priv = NULL;// 否则，私有 swap 数据为 NULL
     }
     return mm;
 }
@@ -78,10 +78,10 @@ mm_create(void) {
 // vma_create - alloc a vma_struct & initialize it. (addr range: vm_start~vm_end)
 struct vma_struct *
 vma_create(uintptr_t vm_start, uintptr_t vm_end, uint_t vm_flags) {
-    struct vma_struct *vma = kmalloc(sizeof(struct vma_struct));
+    struct vma_struct *vma = kmalloc(sizeof(struct vma_struct));// 使用 kmalloc 分配 vma_struct
 
     if (vma != NULL) {
-        vma->vm_start = vm_start;
+        vma->vm_start = vm_start;// 初始化 vma 的起始地址、结束地址和访问标志
         vma->vm_end = vm_end;
         vma->vm_flags = vm_flags;
     }
@@ -90,12 +90,13 @@ vma_create(uintptr_t vm_start, uintptr_t vm_end, uint_t vm_flags) {
 
 
 // find_vma - find a vma  (vma->vm_start <= addr <= vma_vm_end)
+//如果返回NULL，说明查询的虚拟地址不存在/不合法，既不对应内存里的某个页，也不对应硬盘里某个可以换进来的页
 struct vma_struct *
 find_vma(struct mm_struct *mm, uintptr_t addr) {
     struct vma_struct *vma = NULL;
     if (mm != NULL) {
-        vma = mm->mmap_cache;
-        if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) {
+        vma = mm->mmap_cache;// 首先检查 mmap_cache（上一次访问的 vma）是否包含 addr
+        if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) {// 如果 mmap_cache 为空或不包含 addr，则在 vma 列表中查找
                 bool found = 0;
                 list_entry_t *list = &(mm->mmap_list), *le = list;
                 while ((le = list_next(le)) != list) {
@@ -109,7 +110,7 @@ find_vma(struct mm_struct *mm, uintptr_t addr) {
                     vma = NULL;
                 }
         }
-        if (vma != NULL) {
+        if (vma != NULL) {// 如果找到包含 addr 的 vma，则更新 mmap_cache 以加速下次查找
             mm->mmap_cache = vma;
         }
     }
@@ -117,7 +118,7 @@ find_vma(struct mm_struct *mm, uintptr_t addr) {
 }
 
 
-// check_vma_overlap - check if vma1 overlaps vma2 ?
+// check_vma_overlap - check if vma1 overlaps vma2 ? 在插入一个新的vma_struct之前，我们要保证它和原有的区间都不重合。
 static inline void
 check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {
     assert(prev->vm_start < prev->vm_end);
@@ -130,21 +131,21 @@ check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {
 void
 insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
     assert(vma->vm_start < vma->vm_end);
-    list_entry_t *list = &(mm->mmap_list);
+    list_entry_t *list = &(mm->mmap_list);// 获取 mm 的 vma 链表头
     list_entry_t *le_prev = list, *le_next;
 
-        list_entry_t *le = list;
+        list_entry_t *le = list;// 在链表中查找插入位置，使 vma 按起始地址递增顺序插入
         while ((le = list_next(le)) != list) {
             struct vma_struct *mmap_prev = le2vma(le, list_link);
             if (mmap_prev->vm_start > vma->vm_start) {
                 break;
             }
-            le_prev = le;
+            le_prev = le;// 更新前驱节点
         }
 
-    le_next = list_next(le_prev);
+    le_next = list_next(le_prev);// 获取后继节点
 
-    /* check overlap */
+    /* check overlap */// 检查是否与相邻 vma 存在重叠
     if (le_prev != list) {
         check_vma_overlap(le2vma(le_prev, list_link), vma);
     }
@@ -155,7 +156,7 @@ insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
     vma->vm_mm = mm;
     list_add_after(le_prev, &(vma->list_link));
 
-    mm->map_count ++;
+    mm->map_count ++;//计数器
 }
 
 // mm_destroy - free mm and mm internal fields
@@ -331,10 +332,10 @@ int
 do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
     int ret = -E_INVAL;
     //try to find a vma which include addr
-    struct vma_struct *vma = find_vma(mm, addr);
+    struct vma_struct *vma = find_vma(mm, addr);// 尝试在 mm 中查找包含地址 addr 的 vma
 
     pgfault_num++;
-    //If the addr is in the range of a mm's vma?
+    //If the addr is in the range of a mm's vma?检查 addr 是否在 mm 的某个 vma 范围内
     if (vma == NULL || vma->vm_start > addr) {
         cprintf("not valid addr %x, and  can not find it in vma\n", addr);
         goto failed;
@@ -345,12 +346,18 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
      *    (read  an non_existed addr && addr is readable)
      * THEN
      *    continue process
+     * 如果发生页面错误的原因是：
+     * (1) 对已有地址的写操作，或
+     * (2) 对不存在的地址的写操作，并且该地址是可写的，或
+     * (3) 对不存在的地址的读操作，并且该地址是可读的
+     * 则继续处理
+     *
      */
     uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
-        perm |= (PTE_R | PTE_W);
+        perm |= (PTE_R | PTE_W);// 如果 vma 可写，设置 PTE_R 和 PTE_W 标志
     }
-    addr = ROUNDDOWN(addr, PGSIZE);
+    addr = ROUNDDOWN(addr, PGSIZE);// 将地址对齐到页大小
 
     ret = -E_NO_MEM;
 
@@ -376,8 +383,8 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
 
     ptep = get_pte(mm->pgdir, addr, 1);  //(1) try to find a pte, if pte's
                                          //PT(Page Table) isn't existed, then
-                                         //create a PT.
-    if (*ptep == 0) {
+                                         //create a PT.获取或创建地址 addr 的页表项 ptep
+    if (*ptep == 0) {// 如果页表项为空，说明页面还没有分配，则分配新页面并建立映射
         if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {
             cprintf("pgdir_alloc_page in do_pgfault failed\n");
             goto failed;

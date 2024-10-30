@@ -21,7 +21,9 @@ extern size_t max_swap_offset;
 /* *
  * swap_offset - takes a swap_entry (saved in pte), and returns
  * the corresponding offset in swap mem_map.
- * */
+ * 通过解析传入的 swap_entry（通常保存在页表项 pte 中），得到在交换区中对应的偏移量 offset（页面编号）。
+ * 这个偏移量用于定位交换区中的具体位置，帮助系统在 swapfs_read 和 swapfs_write 时准确地找到页面在交换区中的位置。
+ */
 #define swap_offset(entry) ({                                       \
                size_t __offset = (entry >> 8);                        \
                if (!(__offset > 0 && __offset < max_swap_offset)) {    \

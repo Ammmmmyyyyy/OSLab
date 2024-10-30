@@ -50,8 +50,9 @@
 // construct linear address from indexes and offset
 #define PGADDR(d1, d0, t, o) ((uintptr_t)((d1) << PDX1SHIFT | (d0) << PDX0SHIFT | (t) << PTXSHIFT | (o)))
 
-// address in page table or page directory entry
+// address in page table or page directory entry从页表项（PTE）或页目录项（PDE）中提取出页框的物理地址部分
 #define PTE_ADDR(pte)   (((uintptr_t)(pte) & ~0x3FF) << (PTXSHIFT - PTE_PPN_SHIFT))
+//0x3FF 是二进制 0000 0011 1111 1111，取反后变为 1111 1100 0000 0000，因此按位与操作会保留高位的地址部分，去除低 10 位的标志位。
 #define PDE_ADDR(pde)   PTE_ADDR(pde)
 
 /* page directory and page table constants */

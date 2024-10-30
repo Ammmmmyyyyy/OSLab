@@ -13,7 +13,7 @@
 #include <sbi.h>
 
 #define TICK_NUM 100
-
+volatile size_t num=0;
 static void print_ticks() {
     cprintf("%d ticks\n", TICK_NUM);
 #ifdef DEBUG_GRADE
@@ -106,18 +106,24 @@ void print_regs(struct pushregs *gpr) {
 }
 
 static inline void print_pgfault(struct trapframe *tf) {
+    // 打印页面错误地址、发生错误时的特权级（K 表示内核模式，U 表示用户模式），以及错误类型
+    // tf->badvaddr: 页面错误的地址
+    // trap_in_kernel(tf) ? 'K' : 'U': 检查特权级，K 表示内核模式，U 表示用户模式
+    // tf->cause == CAUSE_STORE_PAGE_FAULT ? 'W' : 'R': 判断页面错误是写入错误 (W) 还是读取错误 (R)
     cprintf("page fault at 0x%08x: %c/%c\n", tf->badvaddr,
             trap_in_kernel(tf) ? 'K' : 'U',
             tf->cause == CAUSE_STORE_PAGE_FAULT ? 'W' : 'R');
 }
 
+//  tf: 异常触发时的寄存器状态和地址信息结构体
+// 返回值：成功处理返回 0，否则触发 panic
 static int pgfault_handler(struct trapframe *tf) {
-    extern struct mm_struct *check_mm_struct;
+    extern struct mm_struct *check_mm_struct;// 当前使用的mm_struct的指针，在vmm.c定义
     print_pgfault(tf);
-    if (check_mm_struct != NULL) {
+    if (check_mm_struct != NULL) {// 如果 check_mm_struct 非空，调用 do_pgfault 处理页面错误
         return do_pgfault(check_mm_struct, tf->cause, tf->badvaddr);
     }
-    panic("unhandled page fault.\n");
+    panic("unhandled page fault.\n");// 如果未能处理页面错误，触发 panic 终止程序，提示未处理的页面错误
 }
 
 static volatile int in_swap_tick_event = 0;
@@ -147,10 +153,15 @@ void interrupt_handler(struct trapframe *tf) {
             // In fact, Call sbi_set_timer will clear STIP, or you can clear it
             // directly.
             // clear_csr(sip, SIP_STIP);
-            clock_set_next_event();
-            if (++ticks % TICK_NUM == 0) {
-                print_ticks();
+            clock_set_next_event();//这个代码的原型在clock.h中定义
+            ticks++;//也是在clock.h中被声明为volatile size_t ticks;volatile 是用来告诉编译器这个变量的值可能会被程序以外的因素改变。例如，它可能被硬件、异步事件、或其他线程改变。size_t: 这是一个无符号整型数据类型，用来表示对象的大小
+            if(ticks%TICK_NUM==0){
+            print_ticks();
+            num++;//就在trap.c中就有定义
             }
+            if(num==10){
+            sbi_shutdown();//在实验指导书里面写的是shut_down,但是在sbi.c中这个函数被命名为sbi_shutdown
+           }
             break;
         case IRQ_H_TIMER:
             cprintf("Hypervisor software interrupt\n");
@@ -196,7 +207,7 @@ void exception_handler(struct trapframe *tf) {
             cprintf("Load address misaligned\n");
             break;
         case CAUSE_LOAD_ACCESS:
-            cprintf("Load access fault\n");
+            cprintf("Load access fault\n");// 调用 pgfault_handler 处理页面错误，若处理失败，打印帧并触发 panic
             if ((ret = pgfault_handler(tf)) != 0) {
                 print_trapframe(tf);
                 panic("handle pgfault failed. %e\n", ret);

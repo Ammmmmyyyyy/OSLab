@@ -107,7 +107,7 @@ static inline void *page2kva(struct Page *page) { return KADDR(page2pa(page)); }
 
 static inline struct Page *kva2page(void *kva) { return pa2page(PADDR(kva)); }
 
-static inline struct Page *pte2page(pte_t pte) {
+static inline struct Page *pte2page(pte_t pte) {//从页表项得到对应的页，这里用到了 PTE_ADDR(pte)宏，对页表项做操作，在mmu.h里定义
     if (!(pte & PTE_V)) {
         panic("pte2page called with invalid pte");
     }
