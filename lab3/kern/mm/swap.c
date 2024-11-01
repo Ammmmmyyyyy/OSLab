@@ -40,6 +40,7 @@ swap_init(void)
      }
 
      sm = &swap_manager_clock;//use first in first out Page Replacement Algorithm
+     //sm = &swap_manager_fifo;
      int r = sm->init();
      
      if (r == 0)

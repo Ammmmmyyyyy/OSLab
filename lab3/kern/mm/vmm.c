@@ -408,12 +408,17 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             //(1）According to the mm AND addr, try
             //to load the content of right disk page
             //into the memory which page managed.
+            swap_in(mm,addr,&page);//将该页面从磁盘加载到内存
+                
             //(2) According to the mm,
             //addr AND page, setup the
             //map of phy addr <--->
             //logical addr
+            page_insert(mm->pgdir,page,addr,perm);//建立页面的物理地址和虚拟地址的映射关系
+                
             //(3) make the page swappable.
-            page->pra_vaddr = addr;
+            swap_map_swappable(mm,addr,page,1);//将页面标记为可交换，使得页面管理系统可以将其再次换出到磁盘
+            page->pra_vaddr = addr;// 更新页面的 pra_vaddr 为当前的 addr 地址，记录该页面被访问的线性地址
         } else {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
             goto failed;

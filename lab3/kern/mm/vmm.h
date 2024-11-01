@@ -33,7 +33,7 @@ struct mm_struct {
     struct vma_struct *mmap_cache; // current accessed vma, used for speed purpose 当前访问的 vma，用于加速查找
     pde_t *pgdir;                  // the PDT of these vma这些 vma 的页目录表 (PDT)
     int map_count;                 // the count of these vma这些 vma 的数量
-    void *sm_priv;                   // the private data for swap manager交换管理器的私有数据
+    void *sm_priv;                   // the private data for swap manager交换管理器的私有数据，用于存储交换管理器在页面置换过程中所需的特定数据结构或信息
 };
 
 struct vma_struct *find_vma(struct mm_struct *mm, uintptr_t addr);

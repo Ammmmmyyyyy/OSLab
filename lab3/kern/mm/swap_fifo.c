@@ -33,8 +33,8 @@ list_entry_t pra_list_head;
 static int
 _fifo_init_mm(struct mm_struct *mm)
 {     
-     list_init(&pra_list_head);
-     mm->sm_priv = &pra_list_head;
+     list_init(&pra_list_head);// 初始化 FIFO 页面队列的头节点 pra_list_head
+     mm->sm_priv = &pra_list_head;//将 pra_list_head 设置为交换管理器的私有数据
      //cprintf(" mm->sm_priv %x in fifo_init_mm\n",mm->sm_priv);
      return 0;
 }
@@ -44,14 +44,14 @@ _fifo_init_mm(struct mm_struct *mm)
 static int
 _fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
 {
-    list_entry_t *head=(list_entry_t*) mm->sm_priv;
-    list_entry_t *entry=&(page->pra_page_link);
+    list_entry_t *head=(list_entry_t*) mm->sm_priv;// 获取 pra_list_head 队列的头节点
+    list_entry_t *entry=&(page->pra_page_link);// 获取页面的队列节点
  
     assert(entry != NULL && head != NULL);
     //record the page access situlation
 
-    //(1)link the most recent arrival page at the back of the pra_list_head qeueue.
-    list_add(head, entry);
+    //(1)link the most recent arrival page at the back of the pra_list_head qeueue.将最新到达的页面链接到 pra_list_head 的下一个
+    list_add_before(head, entry);
     return 0;
 }
 /*
@@ -65,12 +65,12 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
          assert(head != NULL);
      assert(in_tick==0);
      /* Select the victim */
-     //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
-     //(2)  set the addr of addr of this page to ptr_page
-    list_entry_t* entry = list_prev(head);
-    if (entry != head) {
+     //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue 从 pra_list_head 队列中选择最早到达的页面（队列头部的前驱节点）
+     //(2)  set the addr of addr of this page to ptr_page 将该页面的地址赋值给 ptr_page
+    list_entry_t* entry = list_prev(head);// 获取 pra_list_head 队列中最早到达的页面（队列尾部的节点）
+    if (entry != head) {//链表不为空
         list_del(entry);
-        *ptr_page = le2page(entry, pra_page_link);
+        *ptr_page = le2page(entry, pra_page_link);// 将页面地址保存到 ptr_page
     } else {
         *ptr_page = NULL;
     }

@@ -68,8 +68,8 @@ struct Page {
     uint_t visited;
     unsigned int property;          // the num of free block, used in first fit pm manager
     list_entry_t page_link;         // free list link
-    list_entry_t pra_page_link;     // used for pra (page replace algorithm)
-    uintptr_t pra_vaddr;            // used for pra (page replace algorithm)
+    list_entry_t pra_page_link;     // used for pra (page replace algorithm)用于支持页面置换算法（PRA）。该节点通常用于将页面加入到页面置换算法的数据结构中（如 FIFO 队列或 LRU 链表），以跟踪页面的访问顺序或频率
+    uintptr_t pra_vaddr;            // used for pra (page replace algorithm)在页面被换出（即写入磁盘）后，pra_vaddr 可以帮助记录该页面曾经映射的虚拟地址，以便在需要时将其换回到合适的虚拟地址位置
 };
 
 /* Flags describing the status of a page frame */
