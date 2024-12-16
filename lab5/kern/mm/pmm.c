@@ -344,29 +344,46 @@ void exit_range(pde_t *pgdir, uintptr_t start, uintptr_t end) {
  *
  * CALL GRAPH: copy_mm-->dup_mmap-->copy_range
  */
+ /*
+ to：目标页目录（Process B 的页表）。
+from：源页目录（Process A 的页表）。
+start 和 end：要复制的地址范围，必须是页对齐的。
+share：是否共享页。如果设置为 true，页表可能指向相同的物理页。
+ */
+ //这段代码的主要作用是将一个进程的地址空间从 from 页表复制到 to 页表，支持页粒度的内容拷贝。
 int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
                bool share) {
-    assert(start % PGSIZE == 0 && end % PGSIZE == 0);
+    assert(start % PGSIZE == 0 && end % PGSIZE == 0);//页对齐？
     assert(USER_ACCESS(start, end));
     // copy content by page unit.
     do {
         // call get_pte to find process A's pte according to the addr start
-        pte_t *ptep = get_pte(from, start, 0), *nptep;
-        if (ptep == NULL) {
+        pte_t *ptep = get_pte(from, start, 0), *nptep;//调用 get_pte 获取源页表 from 中地址 start 对应的页表项指针 ptep。
+        if (ptep == NULL) {//如果 ptep 为 NULL，将 start 更新为下一个页表的起始地址，继续处理。
             start = ROUNDDOWN(start + PTSIZE, PTSIZE);
             continue;
         }
         // call get_pte to find process B's pte according to the addr start. If
         // pte is NULL, just alloc a PT
-        if (*ptep & PTE_V) {
+        if (*ptep & PTE_V) {//检查源页表项是否有效（通过标志位 PTE_V 判断）
+        /*
+        调用 get_pte 获取目标页表 to 中地址 start 对应的页表项指针 nptep。
+如果目标页表项不存在，则创建一个新的页表。
+如果分配失败，返回 -E_NO_MEM。
+        */
             if ((nptep = get_pte(to, start, 1)) == NULL) {
                 return -E_NO_MEM;
             }
-            uint32_t perm = (*ptep & PTE_USER);
+            /*
+            提取源页表项中的权限位 perm。
+通过 pte2page 获取源物理页 page。
+调用 alloc_page 分配一个新的物理页 npage
+            */
+            uint32_t perm = (*ptep & PTE_USER);// 提取源页表项中的权限位 perm。
             // get page from ptep
-            struct Page *page = pte2page(*ptep);
+            struct Page *page = pte2page(*ptep);//通过 pte2page 获取源物理页 page。
             // alloc a page for process B
-            struct Page *npage = alloc_page();
+            struct Page *npage = alloc_page();//调用 alloc_page 分配一个新的物理页 npage
             assert(page != NULL);
             assert(npage != NULL);
             int ret = 0;
@@ -388,8 +405,18 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
              * (3) memory copy from src_kvaddr to dst_kvaddr, size is PGSIZE
              * (4) build the map of phy addr of  nage with the linear addr start
              */
-
-
+             /*
+             /* LAB5:EXERCISE2 YOUR CODE
+            * (1) 找到源页的内核虚拟地址 `src_kvaddr`。
+            * (2) 找到目标页的内核虚拟地址 `dst_kvaddr`。
+            * (3) 将源页内容拷贝到目标页。
+            * (4) 将目标页与目标地址空间的线性地址建立映射。
+            */
+            void *src_kvaddr=page2kva(page);//物理地址转换为虚拟地址
+            void *dst_kvaddr=page2kva(npage);
+            memcpy(dst_kvaddr,src_kvaddr,PGSIZE);
+            //调用 page_insert 将目标页插入到目标页表，并与地址 start 建立映射。
+            ret=page_insert(to, npage, start, perm); // Insert the destination page into the page table of the target process
             assert(ret == 0);
         }
         start += PGSIZE;

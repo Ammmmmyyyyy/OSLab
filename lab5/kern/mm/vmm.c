@@ -8,6 +8,7 @@
 #include <riscv.h>
 #include <swap.h>
 #include <kmalloc.h>
+#include <cow.h>
 
 /* 
   vmm design include two parts: mm_struct (mm) & vma_struct (vma)
@@ -421,6 +422,13 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
     ret = -E_NO_MEM;
 
     pte_t *ptep=NULL;
+
+    //判断页表项权限，如果有效但是不可写，跳转到COW
+    if ((ptep = get_pte(mm->pgdir, addr, 0)) != NULL) {
+        if((*ptep & PTE_V) & ~(*ptep & PTE_W)) {
+            return cow_pgfault(mm, error_code, addr);
+        }
+    }
   
     // try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
     // (notice the 3th parameter '1')
@@ -453,12 +461,15 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             //(1）According to the mm AND addr, try
             //to load the content of right disk page
             //into the memory which page managed.
+            swap_in(mm,addr,&page);
             //(2) According to the mm,
             //addr AND page, setup the
             //map of phy addr <--->
             //logical addr
+            page_insert(mm->pgdir,page,addr,perm);
             //(3) make the page swappable.
-            page->pra_vaddr = addr;
+            swap_map_swappable(mm,addr,page,1);
+            page->pra_vaddr = addr;//通常用于记录页面对应的虚拟地址
         } else {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
             goto failed;
@@ -471,28 +482,54 @@ failed:
 
 bool
 user_mem_check(struct mm_struct *mm, uintptr_t addr, size_t len, bool write) {
+    // 检查从 addr 开始，长度为 len 的一段内存是否可以被用户态程序访问
+    // mm：进程的内存管理结构体，用来管理该进程的虚拟内存
+    // addr：内存检查的起始地址
+    // len：内存检查的长度
+    // write：是否进行写权限检查，如果为 true，则检查写权限；否则检查读权限
+
+    // 如果提供了 mm（进程的内存管理结构体），即在用户空间
     if (mm != NULL) {
+        // 检查该内存区段是否属于用户空间可访问的范围
         if (!USER_ACCESS(addr, addr + len)) {
-            return 0;
+            return 0;  // 如果不可访问，返回 false
         }
-        struct vma_struct *vma;
-        uintptr_t start = addr, end = addr + len;
+
+        struct vma_struct *vma;  // vma 是虚拟内存区域（VMA）的结构体，用来表示一个内存区域
+        uintptr_t start = addr, end = addr + len;  // 起始地址和结束地址
+
+        // 循环检查内存区域的每个 VMA 是否满足访问要求
         while (start < end) {
+            // 找到该地址所在的虚拟内存区域（VMA），如果找不到该 VMA，或者地址小于 VMA 的起始地址，返回 false
             if ((vma = find_vma(mm, start)) == NULL || start < vma->vm_start) {
-                return 0;
+                return 0;  // 地址不在任何有效的 VMA 范围内
             }
+
+            // 检查该 VMA 是否具有适当的访问权限
+            // 如果是写操作，检查 VMA 是否具有写权限；如果是读操作，检查 VMA 是否具有读权限
             if (!(vma->vm_flags & ((write) ? VM_WRITE : VM_READ))) {
-                return 0;
+                return 0;  // 没有适当的权限，返回 false
             }
+
+            // 如果是写操作并且该 VMA 是堆栈区域
             if (write && (vma->vm_flags & VM_STACK)) {
-                if (start < vma->vm_start + PGSIZE) { //check stack start & size
-                    return 0;
+                // 检查堆栈是否被访问在合理的区域
+                // 如果访问的地址小于堆栈起始地址 + 页面大小（PGSIZE），则返回 false
+                if (start < vma->vm_start + PGSIZE) { 
+                    return 0;  // 不允许访问堆栈的前面部分
                 }
             }
+
+            // 更新检查的起始地址为当前 VMA 的结束地址，继续检查下一个内存区域
             start = vma->vm_end;
         }
+
+        // 如果整个区域都符合条件，返回 true
         return 1;
     }
+
+    // 如果 mm 为 NULL，表示当前检查的是内核空间的地址，则调用内核访问检查函数
     return KERN_ACCESS(addr, addr + len);
 }
+
 
